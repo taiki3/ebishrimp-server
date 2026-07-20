@@ -13,6 +13,14 @@ spec:
         name: altinity
       version: "*"
   values:
+    configs:
+      files:
+        config.yaml:
+          watch:
+            namespaces:
+              # Chart default watches only the operator's own namespace;
+              # our CHIs live in the iot namespace.
+              include: [".*"]
     operator:
       resources:
         requests:

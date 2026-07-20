@@ -26,14 +26,16 @@ spec:
               containerPort: 3030
             - name: metrics
               containerPort: 9042
+          # Probe the HTTP console port: a bare TCP open/close on the MQTT
+          # port makes rumqttd log an ERROR for every kubelet probe.
           readinessProbe:
             tcpSocket:
-              port: mqtt
+              port: console
             initialDelaySeconds: 2
             periodSeconds: 5
           livenessProbe:
             tcpSocket:
-              port: mqtt
+              port: console
             initialDelaySeconds: 10
             periodSeconds: 15
           resources:

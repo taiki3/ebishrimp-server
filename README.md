@@ -75,5 +75,5 @@ sensors/<room>/<device_id>/status   死活 (起動時+5分毎, retain LWT {"onli
 
 ## 実バージョン記録欄
 
-- k3s: `v____` (構築後に記入)
+- k3s: `v1.36.2+k3s1` (2026-07-21 構築)
 - rumqttd: `0.20.0` (rust:1.81 でビルド。新しめの rustc では依存 metrics crate がコンパイル不能)

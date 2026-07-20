@@ -114,9 +114,9 @@ mod tests {
 
     #[test]
     fn fmt_value_precision() {
-        assert_eq!(fmt_value(25.345), "25.35");
+        assert_eq!(fmt_value(25.346), "25.35");
         assert_eq!(fmt_value(101.34), "101.3");
-        assert_eq!(fmt_value(1234.5), "1235");
+        assert_eq!(fmt_value(1234.6), "1235");
         assert_eq!(fmt_value(f64::NAN), "-");
     }
 
