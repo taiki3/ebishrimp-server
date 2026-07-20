@@ -1,0 +1,57 @@
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: iot
+spec:
+  defaults:
+    templates:
+      podTemplate: clickhouse
+      dataVolumeClaimTemplate: data
+      serviceTemplate: internal
+  configuration:
+    clusters:
+      - name: main
+        layout:
+          shardsCount: 1
+          replicasCount: 1
+    users:
+      admin/k8s_secret_password: iot/clickhouse-credentials/admin-password
+      admin/networks/ip: "::/0"
+      admin/access_management: "1"
+      ingester/k8s_secret_password: iot/clickhouse-credentials/ingester-password
+      ingester/networks/ip: "::/0"
+      dashboard/k8s_secret_password: iot/clickhouse-credentials/dashboard-password
+      dashboard/networks/ip: "::/0"
+      dashboard/profile: readonly
+    profiles:
+      readonly/readonly: "2"
+  templates:
+    serviceTemplates:
+      - name: internal
+        spec:
+          type: ClusterIP
+          ports:
+            - name: http
+              port: 8123
+            - name: tcp
+              port: 9000
+    podTemplates:
+      - name: clickhouse
+        spec:
+          containers:
+            - name: clickhouse
+              image: clickhouse/clickhouse-server:25.3
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  memory: 4Gi
+    volumeClaimTemplates:
+      - name: data
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: local-path
+          resources:
+            requests:
+              storage: 50Gi

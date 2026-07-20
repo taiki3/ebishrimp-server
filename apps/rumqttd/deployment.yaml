@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rumqttd
+  labels:
+    app: rumqttd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rumqttd
+  template:
+    metadata:
+      labels:
+        app: rumqttd
+    spec:
+      containers:
+        - name: rumqttd
+          image: ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/rumqttd/rumqttd.toml"]
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: console
+              containerPort: 3030
+            - name: metrics
+              containerPort: 9042
+          readinessProbe:
+            tcpSocket:
+              port: mqtt
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: mqtt
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/rumqttd
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: rumqttd-config

@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+.env
+*.age.key
+age-key.txt
+/secrets/plain/

@@ -1,0 +1,84 @@
+# Local E2E development environment mirroring the k3s deployment.
+# Usage: docker compose up -d --build
+# Dashboard: http://localhost:8080  /  MQTT: localhost:1883 (dev creds in docker/)
+services:
+  rumqttd:
+    build: docker/rumqttd
+    volumes:
+      - ./docker/rumqttd/rumqttd-dev.toml:/etc/rumqttd/rumqttd.toml:ro
+    ports:
+      - "1883:1883"
+      - "9042:9042"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3
+    volumes:
+      - ./apps/clickhouse/schema:/docker-entrypoint-initdb.d:ro
+      - ./docker/clickhouse/users.d/dev-users.xml:/etc/clickhouse-server/users.d/dev-users.xml:ro
+      - clickhouse-data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    ulimits:
+      nofile: 262144
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ingester:
+    build:
+      context: .
+      dockerfile: services/ingester/Dockerfile
+    environment:
+      MQTT_HOST: rumqttd
+      MQTT_USERNAME: ingester
+      MQTT_PASSWORD: ingesterpass
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ingester
+      CLICKHOUSE_PASSWORD: ingesterpass
+      BATCH_MAX_SECS: "60"
+      BATCH_MAX_ROWS: "5000"
+      RUST_LOG: info
+    ports:
+      - "9090:9090"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      rumqttd:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: services/dashboard/Dockerfile
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: dashboard
+      CLICKHOUSE_PASSWORD: dashboardpass
+      RUST_LOG: info
+    ports:
+      - "8080:8080"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  mock-publisher:
+    build:
+      context: .
+      dockerfile: services/mock-publisher/Dockerfile
+    environment:
+      MQTT_HOST: rumqttd
+      MQTT_USERNAME: device
+      MQTT_PASSWORD: devicepass
+      INTERVAL_SECS: "10"
+      STATUS_INTERVAL_SECS: "300"
+      RUST_LOG: info
+    depends_on:
+      rumqttd:
+        condition: service_started
+
+volumes:
+  clickhouse-data:

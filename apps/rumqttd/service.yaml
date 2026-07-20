@@ -1,0 +1,32 @@
+# Cluster-internal service (ingester + prometheus)
+apiVersion: v1
+kind: Service
+metadata:
+  name: rumqttd
+  labels:
+    app: rumqttd
+spec:
+  selector:
+    app: rumqttd
+  ports:
+    - name: mqtt
+      port: 1883
+    - name: console
+      port: 3030
+    - name: metrics
+      port: 9042
+---
+# LAN-facing MQTT endpoint (k3s klipper LoadBalancer binds node IP:1883)
+apiVersion: v1
+kind: Service
+metadata:
+  name: rumqttd-mqtt
+  labels:
+    app: rumqttd
+spec:
+  type: LoadBalancer
+  selector:
+    app: rumqttd
+  ports:
+    - name: mqtt
+      port: 1883

@@ -1,0 +1,40 @@
+# Applies the (idempotent) DDL once ClickHouse is up. To re-run after editing
+# the schema: kubectl -n iot delete job clickhouse-schema && flux reconcile ks apps
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-schema
+spec:
+  backoffLimit: 30
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: apply-schema
+          image: clickhouse/clickhouse-server:25.3
+          command:
+            - bash
+            - -ec
+            - |
+              until clickhouse-client --host "$CH_HOST" --user admin --password "$ADMIN_PASSWORD" --query "SELECT 1" >/dev/null 2>&1; do
+                echo "waiting for clickhouse..."; sleep 5
+              done
+              clickhouse-client --host "$CH_HOST" --user admin --password "$ADMIN_PASSWORD" \
+                --multiquery --queries-file /schema/01_schema.sql
+              echo "schema applied"
+          env:
+            - name: CH_HOST
+              value: clickhouse-iot
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: admin-password
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+      volumes:
+        - name: schema
+          configMap:
+            name: clickhouse-schema

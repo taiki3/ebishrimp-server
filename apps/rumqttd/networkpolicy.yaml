@@ -1,0 +1,21 @@
+# Compensating control for password-only auth: MQTT (1883) is reachable from
+# the LAN, but console/metrics ports are cluster-internal only (monitoring ns).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rumqttd
+spec:
+  podSelector:
+    matchLabels:
+      app: rumqttd
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - port: 1883
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9042
+        - port: 3030

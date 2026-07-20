@@ -1,0 +1,23 @@
+<!-- Dev-only users for docker-compose. k8s users are defined in the
+     ClickHouseInstallation CR with SOPS-managed passwords. -->
+<clickhouse>
+    <users>
+        <ingester>
+            <password>ingesterpass</password>
+            <networks><ip>::/0</ip></networks>
+            <profile>default</profile>
+            <quota>default</quota>
+        </ingester>
+        <dashboard>
+            <password>dashboardpass</password>
+            <networks><ip>::/0</ip></networks>
+            <profile>readonly</profile>
+            <quota>default</quota>
+        </dashboard>
+    </users>
+    <profiles>
+        <readonly>
+            <readonly>2</readonly>
+        </readonly>
+    </profiles>
+</clickhouse>

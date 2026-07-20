@@ -1,0 +1,13 @@
+[package]
+name = "mock-publisher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio.workspace = true
+rumqttc.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+rand.workspace = true

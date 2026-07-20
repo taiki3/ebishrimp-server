@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingester
+  labels:
+    app: ingester
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingester
+  template:
+    metadata:
+      labels:
+        app: ingester
+    spec:
+      containers:
+        - name: ingester
+          image: ghcr.io/taiki3/ebishrimp-ingester:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MQTT_HOST
+              value: rumqttd
+            - name: MQTT_PORT
+              value: "1883"
+            - name: MQTT_USERNAME
+              value: ingester
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ingester-env
+                  key: MQTT_PASSWORD
+            - name: CLICKHOUSE_URL
+              value: http://clickhouse-iot:8123
+            - name: CLICKHOUSE_USER
+              value: ingester
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ingester-env
+                  key: CLICKHOUSE_PASSWORD
+            - name: BATCH_MAX_SECS
+              value: "60"
+            - name: BATCH_MAX_ROWS
+              value: "5000"
+            - name: RUST_LOG
+              value: info
+          ports:
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
