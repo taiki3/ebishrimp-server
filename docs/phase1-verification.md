@@ -1,0 +1,30 @@
+# Phase 1 検証記録 (spec §9)
+
+実施日: 2026-07-21 / 環境: taiki3-n100 (N100 4C/32GB, Arch Linux, k3s v1.36.2+k3s1)
+
+| # | 項目 | 結果 | 備考 |
+|---|---|---|---|
+| 1 | `mosquitto_sub -t 'sensors/#'` で全メッセージが見える (認証込み) | ✅ | LAN側 (LoadBalancer 192.168.10.25:1883)。誤パスワードは接続拒否も確認 |
+| 2 | `sensor_raw` 行数がpublish数と一致 | ✅ | 定常増加を確認 (フラッシュ待ち≦1分の誤差内)。parse_errors=0, rows_dropped=0 |
+| 3 | `sensor_1m` / `sensor_1d` が自動で埋まる | ✅ | MV稼働 (compose/k3s両方で確認) |
+| 4 | AS7341→`as7341_raw`、status→`device_status` 振り分け | ✅ | |
+| 5 | mock kill → Last Will で `online=0` → 死活反映 | ✅ | `--grace-period=0 --force` でLWT発火、全6台の `online=false` 記録 |
+| 6 | ダッシュボード3画面がLANから閲覧・ポーリング更新 | ✅ | Traefik Ingress (`dashboard.local`) で3画面200。別端末は hosts 設定後に要目視 |
+| 7 | rumqttd Pod delete → 自動再起動 → 再接続 | ✅ | probe変更ロールアウトで実施。mock 6台再接続、データ継続 |
+| 8 | ingester Pod delete → 取込再開 | ✅ | 676行 → 再起動後 728行 |
+| 9 | **OS再起動 → 全自動復旧** | ⬜ 未実施 | ホストが他ワークロード同居のため実施タイミングは要調整 |
+| 10 | Git push → Flux 自動反映 | ⬜ 未実施 | GitHub リポジトリ作成 + `scripts/bootstrap-flux.sh` 待ち。現在はローカル適用 (deploy-local.sh) |
+| 11 | メモリ実測 | ✅ | ノード全体 23.4Gi/31Gi (73%、他ワークロード含む)。IoTスタック分: ClickHouse 307Mi + Prometheus 375Mi + Grafana 318Mi + アプリ計~10Mi。**軽量化不要と判断** |
+
+## 構築中に踏んだ問題と対処
+
+1. **rumqttd 0.20.0 が最新 rustc でビルド不能** — 依存 `metrics` crate の借用パターンが rust#141402 でハードエラー化。→ ビルダーを `rust:1.81-bookworm` に固定
+2. **clickhouse-operator が CHI を無視** — チャート 0.27.1 のデフォルトは operator 自身の namespace のみ監視。→ values で `watch.namespaces.include: [".*"]`
+3. **kubelet の TCP プローブで rumqttd が毎回 ERROR ログ** — 1883 への素の TCP open/close を接続異常として記録。→ プローブを console ポート (3030) へ
+4. **Prometheus 3.x が rumqttd の /metrics を拒否** — Content-Type ヘッダ無しのため。→ ServiceMonitor に `fallbackScrapeProtocol: PrometheusText0.0.4`
+5. **ポート1883の二重化** — compose (docker-proxy) と k3s (svclb hostPort) が同居。k3s 検証完了後に compose 停止。ローカル開発時は k3s 側と同時起動しないこと
+
+## 既知の軽微な挙動
+
+- mock を kill→即再起動すると LWT の `online=0` と復帰の `online=1` が同一秒に入り、`argMax(online, ts)` の勝敗が不定になり得る (実機 ESP32 では起こらない)
+- rumqttd は retain 配信が不完全なため、死活判定は5分周期の status 発行に依存 (ダッシュボード側は last seen > 15分 でもオフライン判定)

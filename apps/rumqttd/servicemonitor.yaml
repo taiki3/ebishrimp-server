@@ -5,6 +5,9 @@ metadata:
   labels:
     app: rumqttd
 spec:
+  # rumqttd sends no Content-Type header; Prometheus 3.x refuses such
+  # responses unless a fallback protocol is declared.
+  fallbackScrapeProtocol: PrometheusText0.0.4
   selector:
     matchLabels:
       app: rumqttd
