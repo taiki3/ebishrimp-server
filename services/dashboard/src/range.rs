@@ -98,7 +98,11 @@ impl Range {
 /// `?`; when `with_device` is set a second `?` binds the device id. Only
 /// static SQL fragments are interpolated here.
 pub fn series_sql(range: Range, with_device: bool) -> String {
-    let device_filter = if with_device { " AND device_id = ?" } else { "" };
+    let device_filter = if with_device {
+        " AND device_id = ?"
+    } else {
+        ""
+    };
     let interval = range.interval_sql();
     match range.source() {
         Source::Raw => format!(

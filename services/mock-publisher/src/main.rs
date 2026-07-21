@@ -26,12 +26,36 @@ struct Device {
 }
 
 const DEVICES: &[Device] = &[
-    Device { room: "living", id: "env-living-1", kind: Kind::Env { co2: true } },
-    Device { room: "living", id: "as7341-living-1", kind: Kind::As7341 },
-    Device { room: "bedroom", id: "env-bedroom-1", kind: Kind::Env { co2: true } },
-    Device { room: "bedroom", id: "env-bedroom-2", kind: Kind::Env { co2: false } },
-    Device { room: "kitchen", id: "env-kitchen-1", kind: Kind::Env { co2: true } },
-    Device { room: "kitchen", id: "env-kitchen-2", kind: Kind::Env { co2: false } },
+    Device {
+        room: "living",
+        id: "env-living-1",
+        kind: Kind::Env { co2: true },
+    },
+    Device {
+        room: "living",
+        id: "as7341-living-1",
+        kind: Kind::As7341,
+    },
+    Device {
+        room: "bedroom",
+        id: "env-bedroom-1",
+        kind: Kind::Env { co2: true },
+    },
+    Device {
+        room: "bedroom",
+        id: "env-bedroom-2",
+        kind: Kind::Env { co2: false },
+    },
+    Device {
+        room: "kitchen",
+        id: "env-kitchen-1",
+        kind: Kind::Env { co2: true },
+    },
+    Device {
+        room: "kitchen",
+        id: "env-kitchen-2",
+        kind: Kind::Env { co2: false },
+    },
 ];
 
 fn env_or(key: &str, default: &str) -> String {
@@ -42,8 +66,7 @@ fn env_or(key: &str, default: &str) -> String {
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -51,7 +74,9 @@ async fn main() {
     let port: u16 = env_or("MQTT_PORT", "1883").parse().expect("MQTT_PORT");
     let user = env_or("MQTT_USERNAME", "device");
     let pass = env_or("MQTT_PASSWORD", "");
-    let interval: u64 = env_or("INTERVAL_SECS", "10").parse().expect("INTERVAL_SECS");
+    let interval: u64 = env_or("INTERVAL_SECS", "10")
+        .parse()
+        .expect("INTERVAL_SECS");
     let status_interval: u64 = env_or("STATUS_INTERVAL_SECS", "300")
         .parse()
         .expect("STATUS_INTERVAL_SECS");

@@ -1,7 +1,7 @@
 //! Builds the full Apache ECharts option JSON on the server. The browser only
 //! runs `echarts.init` + `setOption` on what we render here.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// One line on the chart: a device's points over time.
 #[derive(Debug, Clone, PartialEq)]
@@ -124,7 +124,10 @@ pub fn chart_option(metric: &str, series: &[DeviceSeries]) -> Value {
 /// which is an identical string in JavaScript. `<!--` is broken up the same
 /// way.
 pub fn script_safe_json(value: &Value) -> String {
-    value.to_string().replace("</", "<\\/").replace("<!--", "<\\!--")
+    value
+        .to_string()
+        .replace("</", "<\\/")
+        .replace("<!--", "<\\!--")
 }
 
 #[cfg(test)]
@@ -176,7 +179,10 @@ mod tests {
 
     #[test]
     fn data_points_are_epoch_ms_pairs() {
-        let option = chart_option("co2", &[series("dev-a", &[(1_753_000_000_000, 640.0, 640.0, 640.0)])]);
+        let option = chart_option(
+            "co2",
+            &[series("dev-a", &[(1_753_000_000_000, 640.0, 640.0, 640.0)])],
+        );
         assert_eq!(option["series"][0]["data"][0][0], 1_753_000_000_000_i64);
         assert_eq!(option["series"][0]["data"][0][1], 640.0);
     }

@@ -104,8 +104,12 @@ impl Config {
             clickhouse_user: env_or("CLICKHOUSE_USER", "ingester"),
             clickhouse_password: env_or("CLICKHOUSE_PASSWORD", ""),
             clickhouse_database: env_or("CLICKHOUSE_DATABASE", "default"),
-            batch_max_rows: env_or("BATCH_MAX_ROWS", "5000").parse().expect("BATCH_MAX_ROWS"),
-            batch_max_secs: env_or("BATCH_MAX_SECS", "60").parse().expect("BATCH_MAX_SECS"),
+            batch_max_rows: env_or("BATCH_MAX_ROWS", "5000")
+                .parse()
+                .expect("BATCH_MAX_ROWS"),
+            batch_max_secs: env_or("BATCH_MAX_SECS", "60")
+                .parse()
+                .expect("BATCH_MAX_SECS"),
             metrics_addr: env_or("METRICS_ADDR", "0.0.0.0:9090"),
         }
     }
@@ -115,8 +119,7 @@ impl Config {
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -256,9 +259,8 @@ async fn batch_loop(
 
 async fn flush(ch: &Client, buf: &mut Buffers, metrics: &Metrics) {
     // Insert order matches the table's ORDER BY to help ClickHouse merges.
-    buf.sensor.sort_by(|a, b| {
-        (&a.metric, &a.device_id, a.ts).cmp(&(&b.metric, &b.device_id, b.ts))
-    });
+    buf.sensor
+        .sort_by(|a, b| (&a.metric, &a.device_id, a.ts).cmp(&(&b.metric, &b.device_id, b.ts)));
 
     let sensor = std::mem::take(&mut buf.sensor);
     let as7341 = std::mem::take(&mut buf.as7341);
@@ -300,7 +302,10 @@ where
     metrics
         .rows_dropped
         .fetch_add(rows.len() as u64, Ordering::Relaxed);
-    error!("dropping {} rows for {table} after {INSERT_RETRIES} failed inserts", rows.len());
+    error!(
+        "dropping {} rows for {table} after {INSERT_RETRIES} failed inserts",
+        rows.len()
+    );
 }
 
 async fn try_insert<T>(ch: &Client, table: &str, rows: &[T]) -> anyhow::Result<()>

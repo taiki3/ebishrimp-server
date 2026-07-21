@@ -11,13 +11,13 @@
 
 use time::OffsetDateTime;
 use topcoat::{
+    context::{app_context, Cx},
+    router::{layout, page, parse_query_params, route, uri, Router, Slot},
+    view::{component, view, Unescaped, View},
     Result,
-    context::{Cx, app_context},
-    router::{Router, Slot, layout, page, parse_query_params, route, uri},
-    view::{Unescaped, View, component, view},
 };
 
-use crate::db::{Db, OverviewRow, group_series};
+use crate::db::{group_series, Db, OverviewRow};
 use crate::echarts::{chart_option, script_safe_json};
 use crate::range::Range;
 use crate::util::{ago, chart_fragment_url, fmt_jst, fmt_value, humanize_uptime, is_online};
@@ -209,7 +209,11 @@ fn resolve_selection(query: &ChartQuery, known_metrics: &[String]) -> ChartSelec
         .as_deref()
         .and_then(Range::parse)
         .unwrap_or(Range::Hour1);
-    ChartSelection { metric, device, range }
+    ChartSelection {
+        metric,
+        device,
+        range,
+    }
 }
 
 #[component]
@@ -270,11 +274,7 @@ async fn chart_body(cx: &Cx, selection: ChartSelection) -> Result {
 }
 
 #[component]
-async fn chart_controls(
-    cx: &Cx,
-    selection: ChartSelection,
-    known_metrics: Vec<String>,
-) -> Result {
+async fn chart_controls(cx: &Cx, selection: ChartSelection, known_metrics: Vec<String>) -> Result {
     let db: &Db = app_context(cx);
     let mut devices = match &selection.metric {
         Some(metric) => db.devices_for_metric(metric).await.unwrap_or_default(),

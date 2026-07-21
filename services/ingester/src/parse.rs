@@ -113,7 +113,9 @@ mod tests {
         match p {
             Parsed::Sensor(rows) => {
                 assert_eq!(rows.len(), 3);
-                assert!(rows.iter().all(|r| r.room == "living" && r.device_id == "env-1"));
+                assert!(rows
+                    .iter()
+                    .all(|r| r.room == "living" && r.device_id == "env-1"));
                 let co2 = rows.iter().find(|r| r.metric == "co2").unwrap();
                 assert_eq!(co2.value, 640.0);
             }

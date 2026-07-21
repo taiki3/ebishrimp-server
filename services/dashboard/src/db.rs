@@ -9,7 +9,7 @@ use time::OffsetDateTime;
 
 use crate::config::Config;
 use crate::echarts::DeviceSeries;
-use crate::range::{Range, series_sql};
+use crate::range::{series_sql, Range};
 use crate::util::epoch_ms;
 
 pub type DbResult<T> = Result<T, clickhouse::error::Error>;
@@ -175,11 +175,7 @@ mod tests {
     fn group_series_splits_by_device() {
         let t0 = datetime!(2026-07-20 00:00:00 UTC);
         let t1 = datetime!(2026-07-20 00:01:00 UTC);
-        let rows = vec![
-            row("a", t0, 1.0),
-            row("a", t1, 2.0),
-            row("b", t0, 3.0),
-        ];
+        let rows = vec![row("a", t0, 1.0), row("a", t1, 2.0), row("b", t0, 3.0)];
         let series = group_series(&rows);
         assert_eq!(series.len(), 2);
         assert_eq!(series[0].device_id, "a");

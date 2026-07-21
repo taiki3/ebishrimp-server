@@ -34,7 +34,8 @@ pub fn ago(now: OffsetDateTime, ts: OffsetDateTime) -> String {
 /// Humanizes an uptime in seconds, e.g. `1日 2時間` / `3時間 4分` / `42秒`.
 pub fn humanize_uptime(uptime_s: u32) -> String {
     let s = u64::from(uptime_s);
-    let (days, hours, minutes, seconds) = (s / 86_400, (s % 86_400) / 3600, (s % 3600) / 60, s % 60);
+    let (days, hours, minutes, seconds) =
+        (s / 86_400, (s % 86_400) / 3600, (s % 3600) / 60, s % 60);
     if days > 0 {
         format!("{days}日 {hours}時間")
     } else if hours > 0 {
@@ -133,6 +134,9 @@ mod tests {
     #[test]
     fn chart_fragment_url_encodes_params() {
         let url = chart_fragment_url("temp&hum", "dev 01", "1h");
-        assert_eq!(url, "/fragments/chart?metric=temp%26hum&device=dev+01&range=1h");
+        assert_eq!(
+            url,
+            "/fragments/chart?metric=temp%26hum&device=dev+01&range=1h"
+        );
     }
 }
