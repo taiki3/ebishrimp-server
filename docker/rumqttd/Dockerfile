@@ -13,3 +13,5 @@ COPY --from=builder /src/target/release/rumqttd /usr/local/bin/rumqttd
 EXPOSE 1883 3030 9042
 ENTRYPOINT ["/usr/local/bin/rumqttd"]
 CMD ["--config", "/etc/rumqttd/rumqttd.toml"]
+
+# NOTE: GHCR への push は .github/workflows/rumqttd-image.yml (workflow_dispatch or このファイル変更) で行う

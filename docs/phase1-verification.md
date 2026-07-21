@@ -13,7 +13,7 @@
 | 7 | rumqttd Pod delete → 自動再起動 → 再接続 | ✅ | probe変更ロールアウトで実施。mock 6台再接続、データ継続 |
 | 8 | ingester Pod delete → 取込再開 | ✅ | 676行 → 再起動後 728行 |
 | 9 | **OS再起動 → 全自動復旧** | ⬜ 未実施 | ホストが他ワークロード同居のため実施タイミングは要調整 |
-| 10 | Git push → Flux 自動反映 | ⬜ 未実施 | GitHub リポジトリ作成 + `scripts/bootstrap-flux.sh` 待ち。現在はローカル適用 (deploy-local.sh) |
+| 10 | Git push → Flux 自動反映 | ✅ | GitHub public リポジトリ作成→`flux bootstrap github` 完了。dashboard replicas 1→2→1 を push だけで反映確認 (revision b2db74e / d5d5f61) |
 | 11 | メモリ実測 | ✅ | ノード全体 23.4Gi/31Gi (73%、他ワークロード含む)。IoTスタック分: ClickHouse 307Mi + Prometheus 375Mi + Grafana 318Mi + アプリ計~10Mi。**軽量化不要と判断** |
 
 ## 構築中に踏んだ問題と対処
