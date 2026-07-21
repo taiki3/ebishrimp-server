@@ -1,3 +1,4 @@
+# MQTT -> ClickHouse ingester
 [package]
 name = "ingester"
 version.workspace = true
