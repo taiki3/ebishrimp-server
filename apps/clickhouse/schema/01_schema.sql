@@ -17,15 +17,18 @@ ORDER BY (metric, device_id, ts)
 TTL ts + INTERVAL 5 YEAR DELETE;
 
 -- ② 1分集計 MV
+-- TTL は新規構築時のみここで効く。既存テーブルには CREATE ... IF NOT EXISTS が
+-- 無視されるため、Job 側で内部テーブルに ALTER を当てている (schema-job.yaml 参照)。
 CREATE MATERIALIZED VIEW IF NOT EXISTS sensor_1m
 ENGINE = AggregatingMergeTree
-ORDER BY (metric, device_id, ts_min) AS
+ORDER BY (metric, device_id, ts_min)
+TTL ts_min + INTERVAL 1 YEAR DELETE AS
 SELECT toStartOfMinute(ts) AS ts_min, room, device_id, metric,
        avgState(value) AS avg_v, minState(value) AS min_v, maxState(value) AS max_v
 FROM sensor_raw
 GROUP BY ts_min, room, device_id, metric;
 
--- ③ 日次集計 MV
+-- ③ 日次集計 MV (日次集約は極小のため TTL なし = 無期限保持)
 CREATE MATERIALIZED VIEW IF NOT EXISTS sensor_1d
 ENGINE = AggregatingMergeTree
 ORDER BY (metric, device_id, ts_day) AS
@@ -47,7 +50,8 @@ CREATE TABLE IF NOT EXISTS as7341_raw (
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
-ORDER BY (device_id, ts);
+ORDER BY (device_id, ts)
+TTL ts + INTERVAL 5 YEAR DELETE;
 
 -- ⑤ デバイス死活
 CREATE TABLE IF NOT EXISTS device_status (
@@ -61,3 +65,12 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (device_id, ts)
 TTL ts + INTERVAL 1 YEAR DELETE;
+
+-- ⑥ 既存テーブルへの TTL 追随
+-- CREATE ... IF NOT EXISTS は既にあるテーブルの TTL を書き換えないので、
+-- TTL を変更したとき Job 再実行で反映されるよう ALTER も併記する (冪等)。
+-- sensor_1m の内部テーブルだけは名前に UUID を含み静的に書けないため
+-- schema-job.yaml 側で解決している。
+ALTER TABLE sensor_raw    MODIFY TTL ts + INTERVAL 5 YEAR DELETE;
+ALTER TABLE as7341_raw    MODIFY TTL ts + INTERVAL 5 YEAR DELETE;
+ALTER TABLE device_status MODIFY TTL ts + INTERVAL 1 YEAR DELETE;
