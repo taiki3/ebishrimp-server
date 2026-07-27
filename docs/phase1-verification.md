@@ -23,6 +23,7 @@
 3. **kubelet の TCP プローブで rumqttd が毎回 ERROR ログ** — 1883 への素の TCP open/close を接続異常として記録。→ プローブを console ポート (3030) へ
 4. **Prometheus 3.x が rumqttd の /metrics を拒否** — Content-Type ヘッダ無しのため。→ ServiceMonitor に `fallbackScrapeProtocol: PrometheusText0.0.4`
 5. **ポート1883の二重化** — compose (docker-proxy) と k3s (svclb hostPort) が同居。k3s 検証完了後に compose 停止。ローカル開発時は k3s 側と同時起動しないこと
+6. **ClickHouse が自分のシステムログで自滅 (2026-07-27 発見)** — 内蔵システムログがデフォルト全有効のため、6日間で `system.trace_log` が 11億行/15.8 GiB (実センサーデータは全部で 6.3 MiB)。さらに超横長の `system.metric_log` のマージが 4Gi メモリ limit を超えて失敗し、無限リトライで CPU 2コアを常時消費。巻き添えで ingester の `sensor_raw` insert も `MEMORY_LIMIT_EXCEEDED` で 1回目失敗するようになった (リトライで救済されデータ欠損は無し)。→ chi.yaml の `configuration.files` でプロファイリング系ログを `remove="1"`、残りは 3日 TTL。既存パーツは `TRUNCATE TABLE system.trace_log` 等で手動除去が必要 (設定から外してもディスク上のテーブルはアタッチされ続けマージ対象のまま)
 
 ## 既知の軽微な挙動
 
