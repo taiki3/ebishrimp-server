@@ -9,6 +9,67 @@ spec:
       dataVolumeClaimTemplate: data
       serviceTemplate: internal
   configuration:
+    files:
+      # ClickHouse 内蔵のシステムログはデフォルト全部有効。室内IoT規模では
+      # 実データ (6 MiB) に対し trace_log が 15.8 GiB まで膨れ、metric_log
+      # (超横長テーブル) のマージが 4Gi limit を超えて失敗→無限リトライし、
+      # CPU 2コアを常時食った上に ingester の insert まで道連れにした。
+      # メトリクスは Prometheus 側で見ているのでプロファイリング系は落とす。
+      config.d/system-logs.xml: |
+        <clickhouse>
+          <trace_log remove="1"/>
+          <metric_log remove="1"/>
+          <asynchronous_metric_log remove="1"/>
+          <latency_log remove="1"/>
+          <processors_profile_log remove="1"/>
+          <!-- 障害調査に要るものは残すが TTL で頭を抑える -->
+          <query_log>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </query_log>
+          <query_views_log>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </query_views_log>
+          <part_log>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </part_log>
+          <error_log>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </error_log>
+          <text_log>
+            <!-- 既定の trace だと Debug が 5分で3万行入る -->
+            <level>information</level>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </text_log>
+        </clickhouse>
+      # ディスク枯渇のガードレール。PVC の 50Gi は local-path provisioner が
+      # 容量を強制しない (単なる hostPath バインド) ため宣言だけで効いていない。
+      # 実効の歯止めはこれ: 空きが閾値を割ると ClickHouse 側が確保を拒否し、
+      # insert/merge が失敗する代わりに SSD を最後まで食い潰さない。
+      # ingester は3回リトライ後に行を捨てる (spec の「最大1分欠損は許容」の範囲)。
+      config.d/storage-guardrail.xml: |
+        <clickhouse>
+          <storage_configuration>
+            <disks>
+              <default>
+                <!-- 100 GiB を切ったら ClickHouse は書き込みをやめる -->
+                <keep_free_space_bytes>107374182400</keep_free_space_bytes>
+              </default>
+            </disks>
+          </storage_configuration>
+        </clickhouse>
+      # 自前の Prometheus エンドポイント。これが無いと ClickHouse の
+      # ディスク使用量が監視から見えず、「ディスクが減っている」ことは
+      # 分かっても「犯人が ClickHouse か」が判別できない。
+      config.d/prometheus.xml: |
+        <clickhouse>
+          <prometheus>
+            <endpoint>/metrics</endpoint>
+            <port>9363</port>
+            <metrics>true</metrics>
+            <events>true</events>
+            <asynchronous_metrics>true</asynchronous_metrics>
+          </prometheus>
+        </clickhouse>
     clusters:
       - name: main
         layout:
@@ -35,6 +96,8 @@ spec:
               port: 8123
             - name: tcp
               port: 9000
+            - name: metrics
+              port: 9363
     podTemplates:
       - name: clickhouse
         spec:

@@ -23,6 +23,34 @@
 3. **kubelet の TCP プローブで rumqttd が毎回 ERROR ログ** — 1883 への素の TCP open/close を接続異常として記録。→ プローブを console ポート (3030) へ
 4. **Prometheus 3.x が rumqttd の /metrics を拒否** — Content-Type ヘッダ無しのため。→ ServiceMonitor に `fallbackScrapeProtocol: PrometheusText0.0.4`
 5. **ポート1883の二重化** — compose (docker-proxy) と k3s (svclb hostPort) が同居。k3s 検証完了後に compose 停止。ローカル開発時は k3s 側と同時起動しないこと
+6. **ClickHouse が自分のシステムログで自滅 (2026-07-27 発見)** — 内蔵システムログがデフォルト全有効のため、6日間で `system.trace_log` が 11億行/15.8 GiB (実センサーデータは全部で 6.3 MiB)。さらに超横長の `system.metric_log` のマージが 4Gi メモリ limit を超えて失敗し、無限リトライで CPU 2コアを常時消費。巻き添えで ingester の `sensor_raw` insert も `MEMORY_LIMIT_EXCEEDED` で 1回目失敗するようになった (リトライで救済されデータ欠損は無し)。→ chi.yaml の `configuration.files` でプロファイリング系ログを `remove="1"`、残りは 3日 TTL。既存パーツは `TRUNCATE TABLE system.trace_log` 等で手動除去が必要 (設定から外してもディスク上のテーブルはアタッチされ続けマージ対象のまま)
+
+## ディスク枯渇のガードレール (2026-07-27 追加)
+
+上記6の暴走を受けて、ClickHouse が SSD を食い尽くさないための多層防御を入れた。
+
+| 層 | 実装 | 効く相手 |
+|---|---|---|
+| 増加を止める | system ログを `remove="1"` / 3日 TTL (chi.yaml) | 今回の trace_log 型の暴走 |
+| 保持を切る | `as7341_raw` 5年 / `sensor_1m` 1年 TTL を追加 | 通常データの無限増加 |
+| 書き込みを拒否 | `keep_free_space_bytes` = 100 GiB (chi.yaml) | 原因を問わずディスク満杯 |
+| 気付く | PrometheusRule 3本 (prometheusrule.yaml) | 上記が発動する前の早期検知 |
+
+**PVC の 50Gi は効いていない** — local-path provisioner は単なる hostPath バインドで容量を強制しないため、宣言上の 50Gi に対して実際は SSD 全体 (931G) を使えてしまう。本物のハード上限が要るなら btrfs qgroup か loop イメージでの隔離が必要だが、前者は FS 全体の quota 有効化 (rescan + 恒常オーバーヘッド)、後者は起動時マウント依存の追加 (検証項目9 のリスク増) を伴うため Phase 1 では見送った。
+
+閾値の根拠 (実測ベース):
+
+- `sensor_raw` の増加は 124,154行/日 × 7バイト/行 = **0.83 MiB/日**。5年TTLでの定常サイズは約 1.5 GB
+- 今回の trace_log 暴走ですら 110 MiB/h だったので、増加アラートは 50 MiB/h (平常の約1000倍) に設定
+- kube-prometheus-stack 標準の `NodeFilesystemAlmostOutOfSpace` は空き5% = 約46GB で発火し、`keep_free_space_bytes` の 100 GiB より**後**なので手遅れ。独自に 150 GB で critical を立てている
+
+**TTL 変更時の手順** — `CREATE ... IF NOT EXISTS` は既存テーブルの TTL を書き換えないため 01_schema.sql に `ALTER TABLE ... MODIFY TTL` を併記してある。反映には Job の削除→再作成が必要 (Job は immutable):
+
+```
+kubectl -n iot delete job clickhouse-schema && flux reconcile ks apps
+```
+
+なお `sensor_1m` の TTL は MV 本体には当てられない (`Engine MaterializedView doesn't support TTL clause`)。内部テーブル名が `.inner_id.<uuid>` で環境ごとに違うため、schema-job.yaml 側で UUID を解決して ALTER している。
 
 ## 既知の軽微な挙動
 

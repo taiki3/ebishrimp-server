@@ -1,0 +1,44 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: clickhouse-disk
+  labels:
+    app: clickhouse
+spec:
+  groups:
+    - name: clickhouse-disk
+      rules:
+        # kube-prometheus-stack 標準の NodeFilesystemAlmostOutOfSpace は空き5%
+        # (このSSDだと約46GB) で発火する。それは chi.yaml の
+        # keep_free_space_bytes=100GiB より下、つまり ClickHouse が既に書き込みを
+        # 止めた後なので手遅れ。止まる前に気付くための独自閾値を置く。
+        - alert: ClickHouseDiskFloorApproaching
+          expr: node_filesystem_avail_bytes{mountpoint="/"} < 161061273600
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ディスク空きが150GBを下回った (ClickHouseは100GBで書き込み停止)"
+            description: "残り {{ $value | humanize1024 }}B。100GiB を切ると ClickHouse が insert/merge を拒否し、ingester は3回リトライ後に行を捨てる。"
+
+        # 実測の平常増加は 0.8 MiB/日 = 0.04 MiB/h。今回の trace_log 暴走ですら
+        # 110 MiB/h だったので、50 MiB/h は「平常の1000倍・暴走は検知」の線。
+        - alert: ClickHouseDataGrowthAnomalous
+          expr: increase(ClickHouseAsyncMetrics_TotalBytesOfMergeTreeTables[1h]) > 52428800
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ClickHouse のデータ増加が異常 (>50MiB/h)"
+            description: "直近1時間で {{ $value | humanize1024 }}B 増加。平常時は 0.04 MiB/h。system ログの暴走かデバイスの流量異常を疑う。"
+
+        # 5年TTLでの定常サイズ見積もりは約1.5GB。10GiB に達している時点で
+        # 想定外の何かが溜まっている (PVC の名目は 50Gi)。
+        - alert: ClickHouseDataSizeHigh
+          expr: ClickHouseAsyncMetrics_TotalBytesOfMergeTreeTables > 10737418240
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "ClickHouse のデータ量が想定を超過 (>10GiB)"
+            description: "現在 {{ $value | humanize1024 }}B。5年TTLでの定常見積もりは約1.5GB。"

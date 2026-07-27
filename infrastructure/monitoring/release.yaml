@@ -20,6 +20,9 @@ spec:
         # Pick up ServiceMonitors from all namespaces regardless of helm labels
         serviceMonitorSelectorNilUsesHelmValues: false
         podMonitorSelectorNilUsesHelmValues: false
+        # 同上。これが true (チャート既定) だと release ラベルの無い
+        # PrometheusRule が拾われず、apps/clickhouse の alert が無効になる
+        ruleSelectorNilUsesHelmValues: false
         resources:
           requests:
             cpu: 100m

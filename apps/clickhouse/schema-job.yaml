@@ -16,12 +16,22 @@ spec:
             - bash
             - -ec
             - |
-              until clickhouse-client --host "$CH_HOST" --user admin --password "$ADMIN_PASSWORD" --query "SELECT 1" >/dev/null 2>&1; do
+              ch() { clickhouse-client --host "$CH_HOST" --user admin --password "$ADMIN_PASSWORD" "$@"; }
+              until ch --query "SELECT 1" >/dev/null 2>&1; do
                 echo "waiting for clickhouse..."; sleep 5
               done
-              clickhouse-client --host "$CH_HOST" --user admin --password "$ADMIN_PASSWORD" \
-                --multiquery --queries-file /schema/01_schema.sql
+              ch --multiquery --queries-file /schema/01_schema.sql
               echo "schema applied"
+
+              # MV の内部テーブルは '.inner_id.<uuid>' で UUID が環境ごとに違うため
+              # SQL に静的に書けない。MV 名への ALTER も
+              # "Engine MaterializedView doesn't support TTL clause" で拒否される。
+              # よって UUID を解決して内部テーブルへ直接当てる (MODIFY TTL は冪等)。
+              INNER=$(ch --query "SELECT concat('.inner_id.', toString(uuid)) FROM system.tables WHERE database='default' AND name='sensor_1m'")
+              if [ -n "$INNER" ]; then
+                ch --query "ALTER TABLE default.\`$INNER\` MODIFY TTL ts_min + INTERVAL 1 YEAR DELETE"
+                echo "sensor_1m inner TTL applied: $INNER"
+              fi
           env:
             - name: CH_HOST
               value: clickhouse-iot

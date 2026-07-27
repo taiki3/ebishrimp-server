@@ -5,6 +5,8 @@ resources:
   - secret-credentials.enc.yaml
   - chi.yaml
   - schema-job.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml
 generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:

@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: clickhouse
+  labels:
+    app: clickhouse
+spec:
+  selector:
+    matchLabels:
+      clickhouse.altinity.com/Service: chi
+      clickhouse.altinity.com/chi: iot
+  endpoints:
+    - port: metrics
+      interval: 30s
