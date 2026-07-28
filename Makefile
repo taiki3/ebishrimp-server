@@ -1,4 +1,4 @@
-.PHONY: build test lint images compose-up compose-down deploy-local e2e-check
+.PHONY: build test lint lint-manifests images compose-up compose-down deploy-local e2e-check
 
 build:
 	cargo build --release --workspace
@@ -8,6 +8,9 @@ test:
 
 lint:
 	cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
+
+lint-manifests:
+	bash scripts/validate-manifests.sh
 
 images:
 	docker build -t ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0 docker/rumqttd
