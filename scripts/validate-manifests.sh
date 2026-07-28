@@ -25,21 +25,53 @@ done
 # ---------------------------------------------------------------- kubeconform
 note "kubeconform"
 if command -v kubeconform >/dev/null; then
-  # Secret は SOPS 暗号化で `sops:` キーが増えるため -strict から除外する。
-  # CRDs-catalog に無い CRD (ClickHouseInstallation 等) は
-  # -ignore-missing-schemas で素通りするので、-summary で件数を必ず表示する。
   CRD='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
-  for d in apps infrastructure; do
-    printf '  %s\n' "$d"
-    kubectl kustomize "$d" | kubeconform \
-      -strict -summary -skip Secret -ignore-missing-schemas \
+  # 意図的に検証から外す kind:
+  #  - Secret: SOPS 暗号化で `sops:` キーが増え -strict を通らない
+  #  - CustomResourceDefinition: kubeconform の既定スキーマ配布元に CRD 自身の
+  #    スキーマが存在しない (customresourcedefinition-apiextensions-v1.json は
+  #    404。-kubernetes-version を変えても同じ)。flux-system の vendored な
+  #    gotk-components.yaml に11件含まれるため、外さないと毎回警告が出続けて
+  #    本当に見るべき警告が埋もれる
+  SKIP_KINDS=Secret,CustomResourceDefinition
+
+  # kubeconform は「-skip で外したもの」と「スキーマが見つからなかったもの」を
+  # どちらも statusSkipped にし msg も空なので、-summary の Skipped 件数だけでは
+  # 両者を区別できない (実測済み)。skip 対象の kind はこちらで指定しているため、
+  # それ以外の statusSkipped = スキーマ未取得 = 未検証 として分けて表示する。
+  # 未検証があっても失敗にはしない (新しい CRD 追加のたびに CI が落ちるため)
+  # が、見逃さないよう明示する。
+  REPORT_PY=$(cat <<'PY'
+import json, sys
+skip = set(sys.argv[1].split(","))
+rs = json.load(sys.stdin)["resources"]
+valid = [r for r in rs if r["status"] == "statusValid"]
+bad = [r for r in rs if r["status"] in ("statusInvalid", "statusError")]
+skipped = [r for r in rs if r["status"] == "statusSkipped"]
+intended = [r for r in skipped if r.get("kind") in skip]
+unknown = [r for r in skipped if r.get("kind") not in skip]
+print(f"        検証 {len(valid)} / 不正 {len(bad)} / 意図的に除外 {len(intended)}")
+if unknown:
+    kinds = ", ".join(sorted({r.get("kind", "?") for r in unknown}))
+    print(f"        !! スキーマ未取得で未検証: {len(unknown)} 件 ({kinds})")
+for r in bad:
+    print(f"        FAIL {r.get('kind')}/{r.get('name')}: {r.get('msg')}")
+sys.exit(1 if bad else 0)
+PY
+)
+  kc() {  # $1 = 表示名、以降 = kubeconform への入力 (無ければ stdin)
+    local label=$1; shift
+    printf '  %s\n' "$label"
+    kubeconform -strict -skip "$SKIP_KINDS" -ignore-missing-schemas \
       -schema-location default -schema-location "$CRD" \
-      2>&1 | sed 's/^/        /' || fail=1
+      -output json -verbose "$@" 2>/dev/null | python3 -c "$REPORT_PY" "$SKIP_KINDS" || fail=1
+  }
+  for d in apps infrastructure; do
+    kubectl kustomize "$d" | kc "$d"
   done
-  printf '  clusters/n150 (素の Flux CR)\n'
-  kubeconform -strict -summary -ignore-missing-schemas \
-    -schema-location default -schema-location "$CRD" \
-    clusters/n150/*.yaml 2>&1 | sed 's/^/        /' || fail=1
+  # flux-system は kustomize build 経由でしか組み立たないので同じく stdin で渡す。
+  kubectl kustomize clusters/n150/flux-system | kc "clusters/n150/flux-system"
+  kc "clusters/n150 (素の Flux CR)" clusters/n150/*.yaml
 else
   printf '  skip  kubeconform 未インストール (CI では必ず実行される)\n'
   printf '        go install github.com/yannh/kubeconform/cmd/kubeconform@latest\n'

@@ -9,9 +9,16 @@ on:
 
 jobs:
   validate:
+    # 読み取りのみで足りるジョブなので既定の広い権限は与えない。
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # checkout は既定で GITHUB_TOKEN を .git/config に残す。
+          # このジョブは以降 git を使わないので残さない。
+          persist-credentials: false
 
       - name: Install kubeconform
         run: |
