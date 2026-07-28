@@ -22,23 +22,17 @@ spec:
           <asynchronous_metric_log remove="1"/>
           <latency_log remove="1"/>
           <processors_profile_log remove="1"/>
-          <!-- 障害調査に要るものは残すが TTL で頭を抑える -->
-          <query_log>
-            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
-          </query_log>
-          <query_views_log>
-            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
-          </query_views_log>
-          <part_log>
-            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
-          </part_log>
-          <error_log>
-            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
-          </error_log>
+          <!-- 障害調査に要るものは残す。
+               保持期間はここでは触らない: Altinity operator が query_log /
+               part_log に <engine>...TTL event_date + interval 30 day</engine>
+               を自動生成しており、<ttl> を併記すると ClickHouse が
+               "If 'engine' is specified for system table, TTL parameters should
+               be specified directly inside 'engine'" (Code: 36) で起動不能になる。
+               重量級の trace_log / metric_log を落とした後は残りは数十MiB規模
+               なので、operator 既定の30日で十分。 -->
           <text_log>
             <!-- 既定の trace だと Debug が 5分で3万行入る -->
             <level>information</level>
-            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
           </text_log>
         </clickhouse>
       # ディスク枯渇のガードレール。PVC の 50Gi は local-path provisioner が
