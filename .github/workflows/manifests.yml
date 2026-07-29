@@ -1,0 +1,36 @@
+name: manifests
+on:
+  push:
+    branches: [main]
+    paths: ["apps/**", "infrastructure/**", "clusters/**", "scripts/validate-manifests.sh", ".github/workflows/manifests.yml"]
+  pull_request:
+    paths: ["apps/**", "infrastructure/**", "clusters/**", "scripts/validate-manifests.sh", ".github/workflows/manifests.yml"]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    # 読み取りのみで足りるジョブなので既定の広い権限は与えない。
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # checkout は既定で GITHUB_TOKEN を .git/config に残す。
+          # このジョブは以降 git を使わないので残さない。
+          persist-credentials: false
+
+      - name: Install kubeconform
+        run: |
+          VER=0.7.0
+          curl -sSfL "https://github.com/yannh/kubeconform/releases/download/v${VER}/kubeconform-linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: Install PyYAML / xmllint
+        run: |
+          python3 -m pip install --quiet pyyaml
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils
+
+      - name: Validate
+        run: bash scripts/validate-manifests.sh
