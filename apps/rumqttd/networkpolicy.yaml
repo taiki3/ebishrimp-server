@@ -1,6 +1,18 @@
-# Compensating control for password-only auth: MQTT (1883 = v4, 1884 = v5) is
-# reachable from the LAN, but console/metrics ports are cluster-internal only
-# (monitoring ns).
+# console (3030) / metrics (9042) は monitoring namespace からのみ。ここは実効。
+#
+# 注意: MQTT (1883 = v4, 1884 = v5) のルールは `from` を省略しており、
+# **送信元を一切制限していない**。spec §1 は「TLS 非採用の補償策は NetworkPolicy」
+# としているが、MQTT に関してこの NetworkPolicy は補償策として機能していない。
+#
+# ipBlock で LAN CIDR に絞ることもできない。k3s の klipper LoadBalancer
+# (externalTrafficPolicy: Cluster) が送信元を SNAT するため、rumqttd から見た
+# LAN クライアントの送信元は 10.42.0.1 になる (実測)。192.168.10.0/24 を
+# ipBlock に書くと LAN の全デバイスが遮断される。
+#
+# MQTT を送信元で絞るなら、NetworkPolicy ではなく以下のいずれか:
+#   - ノードのホストファイアウォール (nftables) で 1883/1884 を LAN に限定
+#   - Service を externalTrafficPolicy: Local にして送信元 IP 保持を検証した上で
+#     ipBlock を併用する (klipper での挙動は未検証)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

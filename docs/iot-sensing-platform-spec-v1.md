@@ -276,7 +276,9 @@ ESP32 実装は Phase 2 だが、モックpublisher と ingester は本仕様に
 | ESP32 実機 | `192.168.10.25:1884` | **MQTT 5.0** |
 | ingester / モックpublisher | `rumqttd:1883` (クラスタ内) | MQTT 3.1.1 |
 
-認証はユーザー名 + パスワードの静的認証のみ。TLS は恒久的に不採用 (§1)、補償策は NetworkPolicy。
+認証はユーザー名 + パスワードの静的認証のみ。TLS は恒久的に不採用 (§1)。
+
+**補償策についての訂正 (2026-07-30)**: §1 は補償策を NetworkPolicy としているが、**MQTT に関して NetworkPolicy は送信元を制限できていない**。`apps/rumqttd/networkpolicy.yaml` の MQTT ルールは `from` を省略しており全ソース許可であり、かつ klipper LoadBalancer (`externalTrafficPolicy: Cluster`) が送信元を SNAT するため、rumqttd から見た LAN クライアントの送信元は `10.42.0.1` になる (実測)。LAN CIDR を `ipBlock` に書くと逆に全デバイスが遮断される。実効的に制限できているのは console (3030) / metrics (9042) のみ。送信元で絞るならホストファイアウォール等、別レイヤが必要 (未対応)。
 
 ESP32 側は `rust-mqtt` (no_std) を使う前提で、同クレートは **MQTT 5.0 のみ実装**しているため v5 リスナーを 1884 に別途用意している。rumqttd はリスナーごとにポートを分ける設計で 1883 に v4/v5 を相乗りできないが、router はリスナー間で共有されるため v5 で publish したメッセージは v4 で購読している ingester に届く (実測確認済み)。
 
