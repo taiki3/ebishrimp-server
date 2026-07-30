@@ -269,6 +269,17 @@ TTL ts + INTERVAL 1 YEAR DELETE;
 
 ESP32 実装は Phase 2 だが、モックpublisher と ingester は本仕様に従う。
 
+### 接続 (確定)
+
+| 用途 | エンドポイント | プロトコル |
+|---|---|---|
+| ESP32 実機 | `192.168.10.25:1884` | **MQTT 5.0** |
+| ingester / モックpublisher | `rumqttd:1883` (クラスタ内) | MQTT 3.1.1 |
+
+認証はユーザー名 + パスワードの静的認証のみ。TLS は恒久的に不採用 (§1)、補償策は NetworkPolicy。
+
+ESP32 側は `rust-mqtt` (no_std) を使う前提で、同クレートは **MQTT 5.0 のみ実装**しているため v5 リスナーを 1884 に別途用意している。rumqttd はリスナーごとにポートを分ける設計で 1883 に v4/v5 を相乗りできないが、router はリスナー間で共有されるため v5 で publish したメッセージは v4 で購読している ingester に届く (実測確認済み)。
+
 ### トピック (確定)
 
 ```

@@ -11,12 +11,18 @@ spec:
   ports:
     - name: mqtt
       port: 1883
+    - name: mqtt-v5
+      port: 1884
     - name: console
       port: 3030
     - name: metrics
       port: 9042
 ---
-# LAN-facing MQTT endpoint (k3s klipper LoadBalancer binds node IP:1883)
+# LAN-facing MQTT endpoint (k3s klipper LoadBalancer binds node IP:1883/1884)
+# rumqttd はリスナーごとにポートを分ける設計で 1883 に v4/v5 を相乗りできない。
+# ingester は v4 (1883)、ESP32 実機は v5 (1884) を使う。rumqttd の router は
+# リスナー間で共有されるので、v5 で publish したメッセージは v4 の購読者
+# (ingester) に届く (実測確認済み)。
 apiVersion: v1
 kind: Service
 metadata:
@@ -30,3 +36,5 @@ spec:
   ports:
     - name: mqtt
       port: 1883
+    - name: mqtt-v5
+      port: 1884
