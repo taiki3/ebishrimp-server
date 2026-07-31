@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         app: mock-publisher
+      annotations:
+        # rumqttd-auth をローテーションしたら3つの Deployment すべてで
+        # 同時に増やすこと。理由は apps/rumqttd/deployment.yaml のコメント参照
+        ebishrimp.io/credential-generation: "1"
     spec:
       containers:
         - name: mock-publisher
@@ -24,11 +28,12 @@ spec:
               value: rumqttd
             - name: MQTT_USERNAME
               value: device
+            # ブローカー側と同一の Secret から取る (複製をなくすため)
             - name: MQTT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: mock-publisher-env
-                  key: MQTT_PASSWORD
+                  name: rumqttd-auth
+                  key: DEVICE_PASSWORD
             - name: INTERVAL_SECS
               value: "10"
             - name: STATUS_INTERVAL_SECS

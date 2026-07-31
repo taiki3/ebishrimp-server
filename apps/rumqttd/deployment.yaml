@@ -13,7 +13,68 @@ spec:
     metadata:
       labels:
         app: rumqttd
+      annotations:
+        # MQTT パスワードをローテーションしたら、secret-auth.enc.yaml と
+        # **同じコミットで**この数字を増やすこと (rumqttd / ingester /
+        # mock-publisher の3つとも)。
+        # Secret は通常リソースなので値を変えても Pod テンプレートは変化せず、
+        # Flux は Secret だけ更新して Pod は古い認証情報のまま動き続ける。
+        # その状態でどれか1つだけ再スケジュールされると新旧が混在して認証が
+        # 壊れる。この注釈を変えることで3つを同時にロールアウトさせる。
+        ebishrimp.io/credential-generation: "1"
     spec:
+      # 設定の構造は平文の ConfigMap (rumqttd.toml.tmpl)、パスワードは Secret。
+      # ここで両者を合成して emptyDir に置き、本体はそれを読む。
+      # sed の区切りは | で、パスワードは hex 48桁 (openssl rand -hex 24) の
+      # ため区切り文字や & のようなメタ文字を含まない。
+      initContainers:
+        - name: render-config
+          # 追加のイメージを引かないよう本体と同じイメージを使う (debian-slim
+          # に sed が入っている)。ENTRYPOINT が rumqttd なので command で上書き。
+          image: ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0
+          imagePullPolicy: IfNotPresent
+          # このイメージは root 起動なので runAsNonRoot だけ付けると
+          # "container has runAsNonRoot and image will run as root" で
+          # 起動できない。UID を明示して非 root で動かす。
+          # 書き込み先は emptyDir の /rendered のみなのでルートFSは読み取り専用。
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              sed -e "s|\${INGESTER_PASSWORD}|${INGESTER_PASSWORD}|g" \
+                  -e "s|\${DEVICE_PASSWORD}|${DEVICE_PASSWORD}|g" \
+                  /tmpl/rumqttd.toml > /rendered/rumqttd.toml
+              # 未置換のプレースホルダを検出する。コメント行は説明のために
+              # ${...} という記法自体を書いているので対象外にする。
+              if grep -v '^[[:space:]]*#' /rendered/rumqttd.toml | grep -q '\${'; then
+                echo "未置換のプレースホルダが残っている" >&2
+                grep -vn '^[[:space:]]*#' /rendered/rumqttd.toml | grep '\${' >&2
+                exit 1
+              fi
+          env:
+            - name: INGESTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rumqttd-auth
+                  key: INGESTER_PASSWORD
+            - name: DEVICE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rumqttd-auth
+                  key: DEVICE_PASSWORD
+          volumeMounts:
+            - name: config-template
+              mountPath: /tmpl
+              readOnly: true
+            - name: config
+              mountPath: /rendered
       containers:
         - name: rumqttd
           image: ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0
@@ -22,6 +83,8 @@ spec:
           ports:
             - name: mqtt
               containerPort: 1883
+            - name: mqtt-v5
+              containerPort: 1884
             - name: console
               containerPort: 3030
             - name: metrics
@@ -49,6 +112,10 @@ spec:
               mountPath: /etc/rumqttd
               readOnly: true
       volumes:
+        # 平文の構造テンプレート (kustomize の configMapGenerator が生成)
+        - name: config-template
+          configMap:
+            name: rumqttd-config-template
+        # initContainer が合成した実設定。Pod のライフサイクル内にのみ存在する
         - name: config
-          secret:
-            secretName: rumqttd-config
+          emptyDir: {}

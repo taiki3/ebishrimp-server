@@ -1,0 +1,57 @@
+# rumqttd の設定テンプレート。**平文で git 管理する**。
+#
+# パスワードは ${...} のプレースホルダにしてあり、initContainer が Secret
+# (rumqttd-auth) の環境変数で置換してから rumqttd に渡す。
+#
+# なぜこうしているか: rumqttd はリスナーごとに auth ブロックを持ち、そこへ
+# パスワードを平文で直書きする形式なので、設定ファイル全体を暗号化すると
+# 「リスナーを1つ足すだけ」の構造変更にも既存パスワードの復号と複製が要る。
+# 構造とクレデンシャルを分離して、構造側は普通にレビューできるようにした。
+# (rumqttd 自体に環境変数展開の機能は無い。${VAR} をリテラル文字列の
+#  パスワードとして扱ってしまうことを実測で確認済み)
+id = 0
+
+[router]
+id = 0
+max_connections = 10010
+max_outgoing_packet_count = 200
+max_segment_size = 104857600
+max_segment_count = 10
+
+# MQTT 3.1.1 (プロトコルレベル4)。ingester とモックpublisher が使う。
+[v4.1]
+name = "v4-1"
+listen = "0.0.0.0:1883"
+next_connection_delay_ms = 1
+    [v4.1.connections]
+    connection_timeout_ms = 60000
+    max_payload_size = 20480
+    max_inflight_count = 500
+    dynamic_filters = true
+        [v4.1.connections.auth]
+        ingester = "${INGESTER_PASSWORD}"
+        device = "${DEVICE_PASSWORD}"
+
+# MQTT 5.0。ESP32 実機が使う。Edge の rust-mqtt (no_std) は v5 のみ実装
+# しているため必要。rumqttd はリスナーごとにポートを分ける設計で 1883 に
+# v4/v5 を相乗りできないので別ポートにする。router はリスナー間で共有され、
+# v5 で publish されたメッセージは v4 で購読している ingester に届く (実測済み)。
+# ingester は v4 を使い続けるので v5 の auth には入れない (最小権限)。
+[v5.1]
+name = "v5-1"
+listen = "0.0.0.0:1884"
+next_connection_delay_ms = 1
+    [v5.1.connections]
+    connection_timeout_ms = 60000
+    max_payload_size = 20480
+    max_inflight_count = 500
+    dynamic_filters = true
+        [v5.1.connections.auth]
+        device = "${DEVICE_PASSWORD}"
+
+[console]
+listen = "0.0.0.0:3030"
+
+[prometheus]
+listen = "0.0.0.0:9042"
+interval = 1

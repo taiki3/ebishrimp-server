@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: ingester
+      annotations:
+        # rumqttd-auth をローテーションしたら3つの Deployment すべてで
+        # 同時に増やすこと。理由は apps/rumqttd/deployment.yaml のコメント参照
+        ebishrimp.io/credential-generation: "1"
     spec:
       containers:
         - name: ingester
@@ -25,11 +29,15 @@ spec:
               value: "1883"
             - name: MQTT_USERNAME
               value: ingester
+            # MQTT のパスワードはブローカー側と同一の Secret から取る。
+            # 以前は ingester-env に複製していたが、片方だけ更新すると
+            # 認証が壊れるため単一の出所にまとめた。
+            # (ingester-env に残っている MQTT_PASSWORD キーは未使用)
             - name: MQTT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: ingester-env
-                  key: MQTT_PASSWORD
+                  name: rumqttd-auth
+                  key: INGESTER_PASSWORD
             - name: CLICKHOUSE_URL
               value: http://clickhouse-iot:8123
             - name: CLICKHOUSE_USER

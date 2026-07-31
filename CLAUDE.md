@@ -27,3 +27,4 @@
 - CHI の `configuration.files` で system ログに `<ttl>` を書くと ClickHouse が起動不能になる (Code: 36)。operator が同テーブルに `<engine>...TTL...</engine>` を生成済みのため。保持期間を変えたいなら engine 句の中に書く
 - **マニフェストの `--dry-run=server` は CHI のスキーマしか見ない**。operator が生成する ClickHouse 設定の妥当性は Pod を起動するまで分からない。CHI を触ったら reconcile 後に Pod が Ready になるまで必ず確認すること
 - マニフェスト変更時は `make lint-manifests` (CI: manifests.yml)
+- MQTT パスワード (`apps/rumqttd/secret-auth.enc.yaml`) をローテーションしたら、rumqttd / ingester / mock-publisher の3つの Deployment の `ebishrimp.io/credential-generation` を**同じコミットで**増やすこと。Secret 単独の変更では Pod がロールせず、後で1つだけ再起動したときに新旧が混在して認証が壊れる
