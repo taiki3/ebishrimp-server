@@ -13,6 +13,15 @@ spec:
     metadata:
       labels:
         app: rumqttd
+      annotations:
+        # MQTT パスワードをローテーションしたら、secret-auth.enc.yaml と
+        # **同じコミットで**この数字を増やすこと (rumqttd / ingester /
+        # mock-publisher の3つとも)。
+        # Secret は通常リソースなので値を変えても Pod テンプレートは変化せず、
+        # Flux は Secret だけ更新して Pod は古い認証情報のまま動き続ける。
+        # その状態でどれか1つだけ再スケジュールされると新旧が混在して認証が
+        # 壊れる。この注釈を変えることで3つを同時にロールアウトさせる。
+        ebishrimp.io/credential-generation: "1"
     spec:
       # 設定の構造は平文の ConfigMap (rumqttd.toml.tmpl)、パスワードは Secret。
       # ここで両者を合成して emptyDir に置き、本体はそれを読む。

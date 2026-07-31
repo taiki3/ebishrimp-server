@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: ingester
+      annotations:
+        # rumqttd-auth をローテーションしたら3つの Deployment すべてで
+        # 同時に増やすこと。理由は apps/rumqttd/deployment.yaml のコメント参照
+        ebishrimp.io/credential-generation: "1"
     spec:
       containers:
         - name: ingester
