@@ -14,6 +14,46 @@ spec:
       labels:
         app: rumqttd
     spec:
+      # 設定の構造は平文の ConfigMap (rumqttd.toml.tmpl)、パスワードは Secret。
+      # ここで両者を合成して emptyDir に置き、本体はそれを読む。
+      # sed の区切りは | で、パスワードは hex 48桁 (openssl rand -hex 24) の
+      # ため区切り文字や & のようなメタ文字を含まない。
+      initContainers:
+        - name: render-config
+          # 追加のイメージを引かないよう本体と同じイメージを使う (debian-slim
+          # に sed が入っている)。ENTRYPOINT が rumqttd なので command で上書き。
+          image: ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              sed -e "s|\${INGESTER_PASSWORD}|${INGESTER_PASSWORD}|g" \
+                  -e "s|\${DEVICE_PASSWORD}|${DEVICE_PASSWORD}|g" \
+                  /tmpl/rumqttd.toml > /rendered/rumqttd.toml
+              # 未置換のプレースホルダを検出する。コメント行は説明のために
+              # ${...} という記法自体を書いているので対象外にする。
+              if grep -v '^[[:space:]]*#' /rendered/rumqttd.toml | grep -q '\${'; then
+                echo "未置換のプレースホルダが残っている" >&2
+                grep -vn '^[[:space:]]*#' /rendered/rumqttd.toml | grep '\${' >&2
+                exit 1
+              fi
+          env:
+            - name: INGESTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rumqttd-auth
+                  key: INGESTER_PASSWORD
+            - name: DEVICE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rumqttd-auth
+                  key: DEVICE_PASSWORD
+          volumeMounts:
+            - name: config-template
+              mountPath: /tmpl
+              readOnly: true
+            - name: config
+              mountPath: /rendered
       containers:
         - name: rumqttd
           image: ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0
@@ -22,6 +62,8 @@ spec:
           ports:
             - name: mqtt
               containerPort: 1883
+            - name: mqtt-v5
+              containerPort: 1884
             - name: console
               containerPort: 3030
             - name: metrics
@@ -49,6 +91,10 @@ spec:
               mountPath: /etc/rumqttd
               readOnly: true
       volumes:
+        # 平文の構造テンプレート (kustomize の configMapGenerator が生成)
+        - name: config-template
+          configMap:
+            name: rumqttd-config-template
+        # initContainer が合成した実設定。Pod のライフサイクル内にのみ存在する
         - name: config
-          secret:
-            secretName: rumqttd-config
+          emptyDir: {}

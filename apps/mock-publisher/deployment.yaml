@@ -24,11 +24,12 @@ spec:
               value: rumqttd
             - name: MQTT_USERNAME
               value: device
+            # ブローカー側と同一の Secret から取る (複製をなくすため)
             - name: MQTT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: mock-publisher-env
-                  key: MQTT_PASSWORD
+                  name: rumqttd-auth
+                  key: DEVICE_PASSWORD
             - name: INTERVAL_SECS
               value: "10"
             - name: STATUS_INTERVAL_SECS

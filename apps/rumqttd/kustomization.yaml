@@ -2,8 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: iot
 resources:
-  - secret-config.enc.yaml
+  - secret-auth.enc.yaml
   - deployment.yaml
   - service.yaml
   - networkpolicy.yaml
   - servicemonitor.yaml
+# ハッシュサフィックスは付けたままにする。テンプレートを変更すると ConfigMap
+# 名が変わり Deployment のロールアウトが自動で走るため (clickhouse-schema の
+# ように disableNameSuffixHash: true にすると設定変更が反映されない)。
+configMapGenerator:
+  - name: rumqttd-config-template
+    files:
+      - rumqttd.toml=rumqttd.toml.tmpl
