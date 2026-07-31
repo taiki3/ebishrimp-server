@@ -33,6 +33,18 @@ spec:
           # に sed が入っている)。ENTRYPOINT が rumqttd なので command で上書き。
           image: ghcr.io/taiki3/ebishrimp-rumqttd:0.20.0
           imagePullPolicy: IfNotPresent
+          # このイメージは root 起動なので runAsNonRoot だけ付けると
+          # "container has runAsNonRoot and image will run as root" で
+          # 起動できない。UID を明示して非 root で動かす。
+          # 書き込み先は emptyDir の /rendered のみなのでルートFSは読み取り専用。
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command: ["/bin/sh", "-ec"]
           args:
             - |
