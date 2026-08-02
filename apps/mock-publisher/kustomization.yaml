@@ -2,8 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: iot
 resources:
-  # secret-env.enc.yaml は参照しない。MQTT パスワードは rumqttd-auth に
-  # 一本化した (apps/rumqttd/secret-auth.enc.yaml)。Flux が古い Secret を
-  # prune する。ファイル自体は未削除 (git 履歴には残るため削除しても
-  # 秘密は消えない。実効的な対処はローテーション済みであること)
+  # MQTT パスワードは apps/rumqttd/secret-auth.enc.yaml に一本化した。
+  # 旧 secret-env.enc.yaml は削除済み。
   - deployment.yaml
