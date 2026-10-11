@@ -1,0 +1,44 @@
+# iot namespace の全コンテナに共通するメモリの見張り。
+#
+# rumqttd がコミットログを溜め込み続けて少なくとも2回 OOMKilled で再起動して
+# いたが (直近 2026-09-28)、自動再起動で表面化せず 2026-10-12 まで誰も気付かな
+# かった。
+# 上限設定で根本対処した上で、同種の「じわじわ増えて落ちる」を早めに捕まえる。
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: iot-memory
+  namespace: iot
+  labels:
+    app: iot
+spec:
+  groups:
+    - name: iot-memory
+      rules:
+        # 上限の 80% を 30分超え続けたら警告。じわじわ型のリークは OOM の
+        # 何日も前にここを越えるので、落ちる前に気付ける。
+        - alert: IotContainerMemoryNearLimit
+          expr: |
+            max by (pod, container) (container_memory_working_set_bytes{namespace="iot", container!="", container!="POD"})
+              / on (pod, container)
+            max by (pod, container) (kube_pod_container_resource_limits{namespace="iot", resource="memory"})
+              > 0.8
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }}/{{ $labels.container }} のメモリが上限の80%を超過"
+            description: "現在 {{ $value | humanizePercentage }}。単調増加なら OOMKilled が近い。"
+
+        # 直近1時間に OOMKilled で再起動したコンテナ。自動再起動で隠れて
+        # しまうのを防ぐ。
+        - alert: IotContainerOOMKilled
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="iot"}[1h]) > 0
+              and on (pod, container)
+            kube_pod_container_status_last_terminated_reason{namespace="iot", reason="OOMKilled"} == 1
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.pod }}/{{ $labels.container }} が OOMKilled で再起動した"
+            description: "メモリ上限を超えて強制終了された。設定上の上限かリークを疑う。"
