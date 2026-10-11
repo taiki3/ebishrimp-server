@@ -14,6 +14,9 @@
 # - k3s は IPv4 シングルスタックで traefik も IPv4 のみなので、IPv6 の :80 を
 #   systemd-socket-proxyd で受けて 127.0.0.1:80 (traefik) に中継する。
 #   クラスタの dual-stack 化はクラスタ再構築が要るため採らない
+# - IPv6 のグローバルアドレスはインターネットから直接届くため、
+#   scripts/host/setup-ipv6-guard.sh を必ず併せて入れること (LAN 外からの
+#   新規接続をホスト全体で落とす)
 #
 # 冪等。名前を足すときは ALIASES に追加して再実行する。
 set -euo pipefail
@@ -111,26 +114,10 @@ After=http-v6-proxy.socket
 ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:80
 UNIT
 
-# IPv6 のグローバルアドレスはインターネットから直接届く。IPv4 の dashboard は
-# ルーターの NAT の内側だったが、IPv6 で 80 番を開くと外から見えるかどうかは
-# ルーターの IPv6 フィルタ次第になってしまう。LAN のオンリンクプレフィックスと
-# リンクローカル、localhost (中継先の 127.0.0.1:80) 以外は拒否する。
-# プレフィックスは RA で配られたもの。ISP 側で変わると LAN 端末からも IPv6 では
-# 繋がらなくなるが、閉じる側に倒れるだけで、ブラウザは Happy Eyeballs で IPv4 に
-# 落ちて開ける。その場合はこのスクリプトを再実行する。
-PREFIX6=$(ip -6 route show dev "$IFACE" | awk '$1 !~ /^fe80/ && $1 ~ /\// {print $1; exit}')
-[ -n "$PREFIX6" ] || { echo "$IFACE に IPv6 のオンリンクプレフィックスが無い" >&2; exit 1; }
-# socket 側にだけ掛ける。accept された接続も待ち受けソケットの設定を引き継ぐ
-# ので、これで外からの接続は落ちる (LAN を許可リストから外すと遮断されることを
-# 確認済み)。service 側に掛けると、中継先 127.0.0.1:80 が iptables で traefik の
-# Pod IP (10.42.0.x) に書き換えられた後の宛先で弾かれ、LAN からも繋がらなくなる。
-sudo rm -rf /etc/systemd/system/http-v6-proxy.service.d
-sudo install -Dm644 /dev/stdin /etc/systemd/system/http-v6-proxy.socket.d/10-lan-only.conf <<UNIT
-# LAN (${PREFIX6}) とリンクローカル以外からの IPv6 接続を拒否する (scripts/host/setup-mdns.sh)
-[Socket]
-IPAddressDeny=any
-IPAddressAllow=localhost link-local ${PREFIX6}
-UNIT
+# 受付の制限 (LAN からのみ) はここでは掛けない。ホスト全体の IPv6 を LAN に
+# 限定する scripts/host/setup-ipv6-guard.sh に一本化している (そちらは ISP の
+# プレフィックス変更にタイマーで追従する)。旧版が置いた socket 側の制限は消す。
+sudo rm -rf /etc/systemd/system/http-v6-proxy.socket.d /etc/systemd/system/http-v6-proxy.service.d
 
 sudo systemctl daemon-reload
 sudo systemctl restart http-v6-proxy.socket
