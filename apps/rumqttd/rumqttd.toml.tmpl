@@ -15,8 +15,23 @@ id = 0
 id = 0
 max_connections = 10010
 max_outgoing_packet_count = 200
-max_segment_size = 104857600
-max_segment_count = 10
+# コミットログの上限。rumqttd は publish されたメッセージを**トピックフィルタ
+# ごと**のログにすべて保持し、size × count を超えたときに古いセグメントから
+# 捨てる。購読者が消えたフィルタのログも残り続ける。
+#
+# 以前は upstream 既定の 100 MiB × 10 = フィルタあたり 1000 MiB で、Pod の
+# メモリ上限 (512Mi) を超えていたため、上限に達する前に OOMKilled になって
+# いた (本番で約17 MiB/日増加、月1回程度 OOM)。検証用ブローカーに5万件ずつ
+# 流した実測では、既定値は 5万件ごとに +24 MiB で直線増加、上限を小さく
+# すると頭打ちになった。
+#
+# 2 MiB × 5 = フィルタあたり 10 MiB。本番流量で約14時間分のバックログで、
+# ingester が止まっても再接続時に追いつける。フィルタが 20 本あっても
+# 200 MiB に収まる。値を上げるときは
+#   (流量のあるフィルタ数) × size × count < メモリ上限
+# を保つこと。
+max_segment_size = 2097152
+max_segment_count = 5
 
 # MQTT 3.1.1 (プロトコルレベル4)。ingester とモックpublisher が使う。
 [v4.1]
