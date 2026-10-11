@@ -39,8 +39,11 @@ bash scripts/deploy-local.sh      # イメージbuild→k3s取込→flux install
 bash scripts/mock-e2e-check.sh    # ClickHouse に行が入っているか確認
 ```
 
-ダッシュボードは Traefik Ingress で `dashboard.local` に公開。閲覧する端末の
-`/etc/hosts` に `<ノードIP> dashboard.local` を追加する。
+ダッシュボードは Traefik Ingress で公開している。
+
+- LAN 内: `http://dashboard.local/` (ホストで `bash scripts/host/setup-mdns.sh` を実行すると mDNS で引ける)
+- 出先: Tailscale で同じ tailnet に入った端末から `https://<ホスト名>.<tailnet>.ts.net/`
+  (ホストで `bash scripts/host/setup-tailscale.sh` を実行。実際の URL は `tailscale serve status` で確認)
 
 ## GitOps (Flux) 本運用
 

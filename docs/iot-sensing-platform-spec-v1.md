@@ -255,6 +255,10 @@ TTL ts + INTERVAL 1 YEAR DELETE;
 | Phase 1 の画面 | ①メトリクス一覧 (metric × device の最新値グリッド) ②時系列チャート (metric/device/期間選択) ③デバイス死活パネル (device_status + Last Will 由来の online フラグ) の3画面まで |
 | 公開 | Traefik Ingress で LAN 内に HTTP 公開 (`dashboard.local` 等の hosts 運用で可) |
 
+**出先からの閲覧 (2026-10-12 追加)**: ホストを Tailscale の tailnet に参加させ、`tailscale serve` で tailnet 内にだけ HTTPS で公開する (`scripts/host/setup-tailscale.sh`)。経路は tailnet → tailscale serve → Traefik (127.0.0.1:80) → Ingress の catch-all → dashboard。インターネットへの公開 (Funnel) はしない (ダッシュボードに認証がないため)。tailscaled は userspace-networking で動かし、ホストの iptables・ルーティング・DNS に触れさせない (k3s のネットワークと干渉させないため)。
+
+このモードでは tailnet から来た接続を tailscaled がホストの localhost に転送する。そのためダッシュボード以外にも、LAN に出ているポート (SSH・MQTT 等) と localhost だけで待ち受けるポート (k3s の内部ポート等) に tailnet 上の端末から届く。tailnet に入れるのは自分のアカウントの端末だけなので宅内 LAN と同等として許容し、MQTT を静的認証のみ・TLS なしとする前提 (§1・§7) も変えない。絞る必要が出たら、Tailscale の ACL でこのホスト宛を tcp:443 のみにする。
+
 ### 6.5 監視
 
 | 項目 | 指定 |
