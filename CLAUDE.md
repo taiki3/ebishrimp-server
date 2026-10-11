@@ -9,7 +9,7 @@
 - `docker compose up -d --build` — ローカルE2E (rumqttd/ClickHouse/ingester/dashboard/mock)
 - `bash scripts/deploy-local.sh` — k3sへのローカルデプロイ (GitHub不要版)
 - `bash scripts/mock-e2e-check.sh` — ClickHouseの行数確認
-- `bash scripts/host/setup-mdns.sh` — ホストで Ingress の `.local` 名 (dashboard.local 等) を avahi で mDNS 広告。名前を増やすときはスクリプト内の ALIASES に追加して再実行。systemd-resolved の mDNS は衝突回避のため無効化している
+- `bash scripts/host/setup-mdns.sh` — ホストで Ingress の `.local` 名 (dashboard.local 等) を avahi で IPv4/IPv6 両方 mDNS 広告し、IPv6 の :80 を traefik (IPv4 のみ) へ中継する。名前を増やすときは ALIASES に追加して再実行。ISP 側で IPv6 プレフィックスが変わったら再実行 (中継は LAN プレフィックス以外を拒否するため。変わっても IPv4 には落ちて開ける)。systemd-resolved の mDNS は衝突回避のため無効化している
 
 ## 重要な確定事項 (spec より)
 
