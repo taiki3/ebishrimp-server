@@ -12,9 +12,30 @@
 | 6 | ダッシュボード3画面がLANから閲覧・ポーリング更新 | ✅ | Traefik Ingress (`dashboard.local`) で3画面200。別端末は hosts 設定後に要目視 |
 | 7 | rumqttd Pod delete → 自動再起動 → 再接続 | ✅ | probe変更ロールアウトで実施。mock 6台再接続、データ継続 |
 | 8 | ingester Pod delete → 取込再開 | ✅ | 676行 → 再起動後 728行 |
-| 9 | **OS再起動 → 全自動復旧** | ⬜ 未実施 | ホストが他ワークロード同居のため実施タイミングは要調整 |
+| 9 | OS再起動 → 全自動復旧 | ✅ | 2026-10-12 に実施 (カーネル 7.1.4→7.2.9 の更新を兼ねた再起動)。手を加えずに全 Pod が Running、Flux / HelmRelease が Ready、MQTT 再接続 (1883 に mock 6台+ingester、1884 に Edge の試験機) と取り込み再開を確認。データの空白は約4分40秒 (停止〜起動〜各 Pod 起動まで)。ホスト側の avahi の mDNS 広告・IPv6 中継・IPv6 の壁 (ip6 lan_guard) も systemd から自動で復帰。詳細は下記 |
 | 10 | Git push → Flux 自動反映 | ✅ | GitHub public リポジトリ作成→`flux bootstrap github` 完了。dashboard replicas 1→2→1 を push だけで反映確認 (revision b2db74e / d5d5f61) |
 | 11 | メモリ実測 | ✅ | ノード全体 23.4Gi/31Gi (73%、他ワークロード含む)。IoTスタック分: ClickHouse 307Mi + Prometheus 375Mi + Grafana 318Mi + アプリ計~10Mi。**軽量化不要と判断** |
+
+## 検証項目9 (OS 再起動) の詳細 (2026-10-12)
+
+カーネル更新 (7.1.4 → 7.2.9) 後に未再起動で、稼働中カーネルのモジュールがディスクから消えていたのを機に実施した。再起動後は一切手を加えずに観察した。
+
+| 確認項目 | 結果 |
+|---|---|
+| ノード | Ready |
+| Pod | 全 Pod Running / Completed。再起動回数の増分は再起動そのものによるもの (最後の終了理由は全て起動直後の `Unknown/255`)。起動後に落ち続けているものは無し |
+| Flux | Kustomization 3つ・HelmRelease 2つとも Ready |
+| rumqttd | 1883 / 1884 / 3030 / 9042 で待ち受け。1883 に7接続 (mock 6台 + ingester)、1884 に1接続 (Edge の試験機が自力で再接続) |
+| ingester | 起動の約30秒後に MQTT へ再接続し `sensors/#` を購読 |
+| 取り込み | 再開。`sensor_raw` の空白は 01:44:24〜01:49:04 の約4分40秒 |
+| dashboard | Ingress 経由で IPv4 / IPv6 とも 200 |
+| 監視 | Prometheus のアラートルール5本が登録済み、取得対象14件すべて up |
+| ホスト側 | `avahi-daemon` / `avahi-alias4@` / `avahi-alias6@` / `http-v6-proxy.socket` / `ipv6-lan-guard.timer` すべて enabled・active。resolved の mDNS は無効のまま。mDNS で `dashboard.local` の A / AAAA を広告 |
+
+所見:
+
+- 約4分40秒の空白は、mock も同じホストで止まっていたため失われた実データは無い。ESP32 実機の接続後は、再起動中に送られた測定値はこの程度欠ける (spec の「クラッシュ時最大1分欠損は許容」は想定外の停止についての判断で、計画的な再起動の扱いは未決)
+- 再起動回数の多い Pod (grafana の5など) は、Pod 内の複数コンテナの合計だった
 
 ## 構築中に踏んだ問題と対処
 
