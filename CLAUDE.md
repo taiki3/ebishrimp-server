@@ -9,7 +9,8 @@
 - `docker compose up -d --build` — ローカルE2E (rumqttd/ClickHouse/ingester/dashboard/mock)
 - `bash scripts/deploy-local.sh` — k3sへのローカルデプロイ (GitHub不要版)
 - `bash scripts/mock-e2e-check.sh` — ClickHouseの行数確認
-- `bash scripts/host/setup-mdns.sh` — ホストで Ingress の `.local` 名 (dashboard.local 等) を avahi で IPv4/IPv6 両方 mDNS 広告し、IPv6 の :80 を traefik (IPv4 のみ) へ中継する。名前を増やすときは ALIASES に追加して再実行。ISP 側で IPv6 プレフィックスが変わったら再実行 (中継は LAN プレフィックス以外を拒否するため。変わっても IPv4 には落ちて開ける)。systemd-resolved の mDNS は衝突回避のため無効化している
+- `bash scripts/host/setup-mdns.sh` — ホストで Ingress の `.local` 名 (dashboard.local 等) を avahi で IPv4/IPv6 両方 mDNS 広告し、IPv6 の :80 を traefik (IPv4 のみ) へ中継する。名前を増やすときは ALIASES に追加して再実行。systemd-resolved の mDNS は衝突回避のため無効化している
+- `bash scripts/host/setup-ipv6-guard.sh` — ホストへの IPv6 の新規接続を LAN (オンリンクのプレフィックスとリンクローカル) からのみに制限する nftables テーブル `ip6 lan_guard`。プレフィックス変更にはタイマー (5分) で追従。外部公開したいポートは `PUBLIC_TCP_PORTS="25565"` のように指定して再実行
 - `bash scripts/host/setup-tailscale.sh` — ホストを Tailscale の tailnet に参加させ、ダッシュボードを tailnet 内にだけ HTTPS 公開する (`tailscale serve` → traefik)。URL は `tailscale serve status` で確認。tailscaled は userspace-networking で動かし、ホストの iptables・ルーティング・DNS には触れない
 
 ## 重要な確定事項 (spec より)
@@ -32,4 +33,6 @@
 - rumqttd は publish された全メッセージを**トピックフィルタごと**のコミットログにメモリ保持し、`max_segment_size × max_segment_count` を超えるまで捨てない (購読者が消えたフィルタも残る)。upstream 既定の 100MiB×10 は Pod の上限 512Mi を超えており月1回 OOMKilled していた。値を変えるなら `ログが残る全フィルタ数 (購読者が切断済みのものも含む) × size × count < メモリ上限 − ログ以外の使用量 (実測約20 MiB) − 安全余裕` を保つこと。現行の 10 MiB/フィルタなら25本程度まで
 - 負荷試験で `mosquitto_pub -l -q 1` に高速で流すと大半が届かずに捨てられる。速度を抑えて流し、console `/router` (ログに出力される) の `total_publishes` で届いた件数を必ず確認すること
 - Tailscale は userspace-networking なので、**ホスト自身からは tailnet 経由の疎通確認ができない** (ホストのカーネルは tailnet の IP を持たず、`tailscale nc` で自分に繋いでも何も返らない)。サーバー側で確かめられるのは `tailscale serve status` と `curl http://127.0.0.1/healthz` まで。通しの確認は tailnet 上の別の端末からやること
+- ホストで `nftables.service` を有効化しないこと。Arch 既定の `/etc/nftables.conf` は `flush ruleset` で k3s / Docker のルールを消す。IPv6 の壁は専用ユニット `ipv6-lan-guard` が自分のテーブルだけを入れ替える
+- Arch でカーネルを更新して再起動していないと、稼働中カーネルのモジュールがディスクから消えており、未ロードのモジュールは使えない (nft の `ct state` が読めず、ファイアウォールの投入が失敗した)。`uname -r` と `/lib/modules/` を比べて確認する
 - MQTT パスワード (`apps/rumqttd/secret-auth.enc.yaml`) をローテーションしたら、rumqttd / ingester / mock-publisher の3つの Deployment の `ebishrimp.io/credential-generation` を**同じコミットで**増やすこと。Secret 単独の変更では Pod がロールせず、後で1つだけ再起動したときに新旧が混在して認証が壊れる
